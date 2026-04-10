@@ -5,25 +5,24 @@ import android.service.notification.StatusBarNotification
 import com.JoseRosas.registrador.contacts.ContactResolver
 import com.JoseRosas.registrador.filters.EventFilter
 import com.JoseRosas.registrador.model.EventType
-import com.JoseRosas.registrador.util.AppLogger
-import com.JoseRosas.registrador.network.TcpClient
 import com.JoseRosas.registrador.network.AppConfig
+import com.JoseRosas.registrador.network.TcpClient
+import com.JoseRosas.registrador.util.AppLogger
+
 class WhatsAppNotificationListener : NotificationListenerService() {
 
     private lateinit var contactResolver: ContactResolver
     private lateinit var eventFilter: EventFilter
     private lateinit var tcpClient: TcpClient
+
     private var currentIp: String = ""
     private var currentPort: Int = 0
+
     override fun onCreate() {
         super.onCreate()
         contactResolver = ContactResolver(applicationContext)
         eventFilter = EventFilter()
         refreshTcpClientIfNeeded()
-
-        val ip = AppConfig.getServerIp(applicationContext)
-        val port = AppConfig.getServerPort(applicationContext)
-        tcpClient = TcpClient(ip, port)
     }
 
     override fun onListenerConnected() {
@@ -34,7 +33,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName ?: return
 
-        if (packageName != "com.whatsapp" && packageName != "com.whatsapp.w4b") return
+        if (!isWhatsAppPackage(packageName)) return
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()?.trim() ?: return
@@ -42,15 +41,23 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         AppLogger.d("Notificación de paquete: $packageName")
 
-        if (title.contains(":")) {
+        if (isProbablyGroup(title, text)) {
             AppLogger.d("Ignorado: grupo detectado -> $title")
             return
         }
 
-        val number = contactResolver.getPhoneNumber(title)
+        val rawNumber = contactResolver.getPhoneNumber(title)
 
-        if (number.isNullOrEmpty()) {
+        if (rawNumber.isNullOrEmpty()) {
             AppLogger.d("No se encontró número para: $title")
+            return
+        }
+
+        val number = normalizeNumber(rawNumber)
+
+        val blockedNumbers = setOf("60345413")
+        if (number in blockedNumbers) {
+            AppLogger.d("Ignorado: número bloqueado -> $number")
             return
         }
 
@@ -88,16 +95,32 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         val lower = text.lowercase()
 
         return when {
-            "llamada" in lower -> EventType.CALL
             "videollamada" in lower -> EventType.CALL
+            "llamada" in lower -> EventType.CALL
             else -> EventType.MESSAGE
         }
     }
 
     private fun isProbablyGroup(title: String, text: String?): Boolean {
         if (title.contains(":")) return true
-        if (text != null && text.contains(":")) return true
+        if (!text.isNullOrEmpty() && text.contains(":")) return true
         return false
+    }
+
+    private fun normalizeNumber(number: String): String {
+        var n = number.trim()
+            .replace(" ", "")
+            .replace("-", "")
+            .replace("(", "")
+            .replace(")", "")
+
+        if (n.startsWith("+591")) {
+            n = n.substring(4)
+        } else if (n.startsWith("591")) {
+            n = n.substring(3)
+        }
+
+        return n
     }
 
     private fun refreshTcpClientIfNeeded() {
@@ -116,8 +139,4 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             AppLogger.d("TCP configurado a $currentIp:$currentPort")
         }
     }
-
-
-
-
 }
