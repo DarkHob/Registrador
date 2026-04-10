@@ -34,10 +34,18 @@ class ContactResolver(private val context: Context) {
     }
 
     private fun cleanNumber(number: String): String {
-        return number
+        var n = number
             .replace(" ", "")
             .replace("-", "")
             .replace("(", "")
             .replace(")", "")
+
+        if (n.startsWith("+591")) {
+            n = n.substring(4)
+        } else if (n.startsWith("591")) {
+            n = n.substring(3)
+        }
+
+        return n
     }
 }

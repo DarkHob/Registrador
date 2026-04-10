@@ -43,10 +43,19 @@ class EventFilter(
     }
 
     private fun normalize(number: String): String {
-        return number.trim()
+        var n = number.trim()
             .replace(" ", "")
             .replace("-", "")
             .replace("(", "")
             .replace(")", "")
+
+        // 🔥 quitar código país Bolivia
+        if (n.startsWith("+591")) {
+            n = n.substring(4)
+        } else if (n.startsWith("591")) {
+            n = n.substring(3)
+        }
+
+        return n
     }
 }
