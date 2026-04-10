@@ -13,10 +13,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     private lateinit var contactResolver: ContactResolver
     private lateinit var eventFilter: EventFilter
     private lateinit var tcpClient: TcpClient
+    private var currentIp: String = ""
+    private var currentPort: Int = 0
     override fun onCreate() {
         super.onCreate()
         contactResolver = ContactResolver(applicationContext)
         eventFilter = EventFilter()
+        refreshTcpClientIfNeeded()
 
         val ip = AppConfig.getServerIp(applicationContext)
         val port = AppConfig.getServerPort(applicationContext)
@@ -71,6 +74,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         AppLogger.d("Tipo: $type")
         AppLogger.d("Mensaje: $text")
 
+        refreshTcpClientIfNeeded()
         tcpClient.send(number, type.name, System.currentTimeMillis())
     }
 
@@ -94,6 +98,23 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         if (title.contains(":")) return true
         if (text != null && text.contains(":")) return true
         return false
+    }
+
+    private fun refreshTcpClientIfNeeded() {
+        val newIp = AppConfig.getServerIp(applicationContext)
+        val newPort = AppConfig.getServerPort(applicationContext)
+
+        if (!::tcpClient.isInitialized || newIp != currentIp || newPort != currentPort) {
+            if (::tcpClient.isInitialized) {
+                tcpClient.close()
+            }
+
+            currentIp = newIp
+            currentPort = newPort
+            tcpClient = TcpClient(currentIp, currentPort)
+
+            AppLogger.d("TCP configurado a $currentIp:$currentPort")
+        }
     }
 
 
