@@ -6,16 +6,21 @@ import com.JoseRosas.registrador.contacts.ContactResolver
 import com.JoseRosas.registrador.filters.EventFilter
 import com.JoseRosas.registrador.model.EventType
 import com.JoseRosas.registrador.util.AppLogger
-
+import com.JoseRosas.registrador.network.TcpClient
+import com.JoseRosas.registrador.network.AppConfig
 class WhatsAppNotificationListener : NotificationListenerService() {
 
     private lateinit var contactResolver: ContactResolver
     private lateinit var eventFilter: EventFilter
-
+    private lateinit var tcpClient: TcpClient
     override fun onCreate() {
         super.onCreate()
         contactResolver = ContactResolver(applicationContext)
         eventFilter = EventFilter()
+
+        val ip = AppConfig.getServerIp(applicationContext)
+        val port = AppConfig.getServerPort(applicationContext)
+        tcpClient = TcpClient(ip, port)
     }
 
     override fun onListenerConnected() {
@@ -65,6 +70,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         AppLogger.d("Número real: $number")
         AppLogger.d("Tipo: $type")
         AppLogger.d("Mensaje: $text")
+
+        tcpClient.send(number, type.name, System.currentTimeMillis())
     }
 
     private fun isWhatsAppPackage(packageName: String): Boolean {

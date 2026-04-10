@@ -38,7 +38,16 @@ import androidx.core.content.ContextCompat
 import com.JoseRosas.registrador.service.BridgeForegroundService
 import com.JoseRosas.registrador.ui.theme.RegistradorTheme
 import com.JoseRosas.registrador.util.AppLogger
-
+import android.content.Context
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalContext
+import com.JoseRosas.registrador.network.AppConfig
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher =
@@ -78,11 +87,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(onStopApp: () -> Unit) {
+    val context = LocalContext.current
     val logs by AppLogger.logs.collectAsState()
-    val showExitDialog = remember { mutableStateOf(false) }
+
+    var showExitDialog by remember { mutableStateOf(false) }
+    var showConfigDialog by remember { mutableStateOf(false) }
+
+    var currentIp by remember { mutableStateOf(AppConfig.getServerIp(context)) }
+    var currentPort by remember { mutableStateOf(AppConfig.getServerPort(context).toString()) }
 
     BackHandler {
-        showExitDialog.value = true
+        showExitDialog = true
     }
 
     Column(
@@ -90,10 +105,23 @@ fun MainScreen(onStopApp: () -> Unit) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Registrador activo",
-            style = MaterialTheme.typography.headlineSmall
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Registrador activo",
+                style = MaterialTheme.typography.headlineSmall
+            )
+
+            Button(onClick = {
+                currentIp = AppConfig.getServerIp(context)
+                currentPort = AppConfig.getServerPort(context).toString()
+                showConfigDialog = true
+            }) {
+                Text("Configurar")
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -112,13 +140,18 @@ fun MainScreen(onStopApp: () -> Unit) {
                 Text("Limpiar logs")
             }
 
-            OutlinedButton(onClick = { showExitDialog.value = true }) {
+            OutlinedButton(onClick = { showExitDialog = true }) {
                 Text("Cerrar app")
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
         HorizontalDivider()
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text("IP actual: ${AppConfig.getServerIp(context)}")
+        Text("Puerto actual: ${AppConfig.getServerPort(context)}")
+
         Spacer(modifier = Modifier.height(12.dp))
 
         LazyColumn(
@@ -134,21 +167,66 @@ fun MainScreen(onStopApp: () -> Unit) {
         }
     }
 
-    if (showExitDialog.value) {
+    if (showConfigDialog) {
         AlertDialog(
-            onDismissRequest = { showExitDialog.value = false },
+            onDismissRequest = { showConfigDialog = false },
+            title = { Text("Configurar servidor") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = currentIp,
+                        onValueChange = { currentIp = it },
+                        label = { Text("IP de la PC") },
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = currentPort,
+                        onValueChange = { currentPort = it },
+                        label = { Text("Puerto") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Text("Después de guardar, cierra y vuelve a abrir la app para aplicar los cambios.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val portInt = currentPort.toIntOrNull() ?: 9000
+                    AppConfig.setServerIp(context, currentIp.trim())
+                    AppConfig.setServerPort(context, portInt)
+                    showConfigDialog = false
+                    AppLogger.d("Configuración guardada: ${currentIp.trim()}:$portInt")
+                }) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfigDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
             title = { Text("Cerrar aplicación") },
             text = { Text("¿Estás seguro de cerrar la app? El bridge dejará de estar activo.") },
             confirmButton = {
                 Button(onClick = {
-                    showExitDialog.value = false
+                    showExitDialog = false
                     onStopApp()
                 }) {
                     Text("Sí, cerrar")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showExitDialog.value = false }) {
+                OutlinedButton(onClick = { showExitDialog = false }) {
                     Text("Cancelar")
                 }
             }
