@@ -1,15 +1,16 @@
 package com.JoseRosas.registrador
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,11 +20,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,27 +34,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.JoseRosas.registrador.network.AppConfig
 import com.JoseRosas.registrador.service.BridgeForegroundService
 import com.JoseRosas.registrador.ui.theme.RegistradorTheme
 import com.JoseRosas.registrador.util.AppLogger
-import android.content.Context
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.platform.LocalContext
-import com.JoseRosas.registrador.network.AppConfig
+
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                AppLogger.d("Permiso de contactos concedido")
+            } else {
+                AppLogger.d("Permiso de contactos denegado")
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +65,8 @@ class MainActivity : ComponentActivity() {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+        } else {
+            AppLogger.d("Permiso de contactos ya concedido")
         }
 
         val serviceIntent = Intent(this, BridgeForegroundService::class.java)
@@ -96,6 +101,8 @@ fun MainScreen(onStopApp: () -> Unit) {
     var currentIp by remember { mutableStateOf(AppConfig.getServerIp(context)) }
     var currentPort by remember { mutableStateOf(AppConfig.getServerPort(context).toString()) }
 
+    val notificationEnabled = isNotificationServiceEnabled(context)
+
     BackHandler {
         showExitDialog = true
     }
@@ -124,6 +131,30 @@ fun MainScreen(onStopApp: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = if (notificationEnabled) {
+                "Listener activo ✅"
+            } else {
+                "Listener desactivado ❌"
+            },
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (!notificationEnabled) {
+            Button(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                    context.startActivity(intent)
+                }
+            ) {
+                Text("Activar notificaciones")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         Text(
             text = "Eventos recientes",
@@ -232,4 +263,13 @@ fun MainScreen(onStopApp: () -> Unit) {
             }
         )
     }
+}
+
+fun isNotificationServiceEnabled(context: Context): Boolean {
+    val enabledListeners = Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners"
+    ) ?: return false
+
+    return enabledListeners.contains(context.packageName)
 }
