@@ -38,6 +38,7 @@ class EventFilter(
                 true
             }
 
+            EventType.OUTGOING_CALL -> false
             EventType.UNKNOWN -> false
         }
     }

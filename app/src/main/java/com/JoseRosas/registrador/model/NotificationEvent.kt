@@ -3,6 +3,7 @@ package com.JoseRosas.registrador.model
 enum class EventType {
     MESSAGE,
     CALL,
+    OUTGOING_CALL,
     UNKNOWN
 }
 

@@ -32,12 +32,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName ?: return
-
         if (!isWhatsAppPackage(packageName)) return
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()?.trim() ?: return
         val text = extras.getCharSequence("android.text")?.toString()?.trim()
+        val subText = extras.getCharSequence("android.subText")?.toString()?.trim()
 
         AppLogger.d("Notificación de paquete: $packageName")
 
@@ -47,7 +47,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         }
 
         val rawNumber = contactResolver.getPhoneNumber(title)
-
         if (rawNumber.isNullOrEmpty()) {
             AppLogger.d("No se encontró número para: $title")
             return
@@ -61,7 +60,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        val type = detectEventType(text)
+        val type = detectEventType(text, subText)
+
+        if (type == EventType.OUTGOING_CALL) {
+            AppLogger.d("Ignorado: llamada saliente -> $number")
+            return
+        }
 
         if (type == EventType.UNKNOWN) {
             AppLogger.d("Ignorado: tipo desconocido")
@@ -80,6 +84,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         AppLogger.d("Número real: $number")
         AppLogger.d("Tipo: $type")
         AppLogger.d("Mensaje: $text")
+        AppLogger.d("SubText: $subText")
 
         refreshTcpClientIfNeeded()
         tcpClient.send(number, type.name, System.currentTimeMillis())
@@ -89,16 +94,36 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         return packageName == "com.whatsapp" || packageName == "com.whatsapp.w4b"
     }
 
-    private fun detectEventType(text: String?): EventType {
-        if (text.isNullOrBlank()) return EventType.UNKNOWN
+    private fun detectEventType(text: String?, subText: String?): EventType {
+        val t = (text ?: "").lowercase()
+        val s = (subText ?: "").lowercase()
+        val joined = "$t $s".trim()
 
-        val lower = text.lowercase()
+        if (joined.isBlank()) return EventType.UNKNOWN
 
-        return when {
-            "videollamada" in lower -> EventType.CALL
-            "llamada" in lower -> EventType.CALL
-            else -> EventType.MESSAGE
+        // llamadas salientes
+        if (
+            joined.contains("llamando") ||
+            joined.contains("calling") ||
+            joined.contains("outgoing") ||
+            joined.contains("videollamada saliente") ||
+            joined.contains("llamada saliente")
+        ) {
+            return EventType.OUTGOING_CALL
         }
+
+        // llamadas entrantes / activas detectables
+        if (
+            joined.contains("llamada") ||
+            joined.contains("videollamada") ||
+            joined.contains("incoming voice call") ||
+            joined.contains("incoming video call") ||
+            joined.contains("llamada entrante")
+        ) {
+            return EventType.CALL
+        }
+
+        return EventType.MESSAGE
     }
 
     private fun isProbablyGroup(title: String, text: String?): Boolean {
