@@ -4,13 +4,15 @@ import com.JoseRosas.registrador.model.EventType
 
 class EventFilter(
     private val debounceMs: Long = 3000L,
-    private val messageCooldownMs: Long = 5 * 60 * 1000L
+    private val messageCooldownMs: Long = 5 * 60 * 1000L,
+    private val duplicateMessageWindowMs: Long = 24 * 60 * 60 * 1000L
 ) {
 
     private val lastEventByNumber = mutableMapOf<String, Long>()
     private val lastMessageSentByNumber = mutableMapOf<String, Long>()
+    private val lastProcessedMessageSignature = mutableMapOf<String, Long>()
 
-    fun shouldSend(number: String, type: EventType): Boolean {
+    fun shouldSend(number: String, type: EventType, messageText: String?): Boolean {
         val now = System.currentTimeMillis()
         val key = normalize(number)
 
@@ -27,6 +29,19 @@ class EventFilter(
             EventType.CALL -> true
 
             EventType.MESSAGE -> {
+                val normalizedMessage = normalizeMessage(messageText)
+
+                if (normalizedMessage.isNotEmpty()) {
+                    val signature = "$key|$normalizedMessage"
+                    val lastSeen = lastProcessedMessageSignature[signature]
+                    if (lastSeen != null && now - lastSeen < duplicateMessageWindowMs) {
+                        return false
+                    }
+                    lastProcessedMessageSignature[signature] = now
+                    cleanupOldSignatures(now)
+                    return true
+                }
+
                 val lastMessageTime = lastMessageSentByNumber[key]
                 if (lastMessageTime != null) {
                     val diff = now - lastMessageTime
@@ -43,6 +58,16 @@ class EventFilter(
         }
     }
 
+    private fun cleanupOldSignatures(now: Long) {
+        val iterator = lastProcessedMessageSignature.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (now - entry.value > duplicateMessageWindowMs) {
+                iterator.remove()
+            }
+        }
+    }
+
     private fun normalize(number: String): String {
         var n = number.trim()
             .replace(" ", "")
@@ -50,7 +75,6 @@ class EventFilter(
             .replace("(", "")
             .replace(")", "")
 
-        // 🔥 quitar código país Bolivia
         if (n.startsWith("+591")) {
             n = n.substring(4)
         } else if (n.startsWith("591")) {
@@ -58,5 +82,13 @@ class EventFilter(
         }
 
         return n
+    }
+
+    private fun normalizeMessage(messageText: String?): String {
+        if (messageText.isNullOrBlank()) return ""
+
+        return messageText.trim()
+            .lowercase()
+            .replace("\\s+".toRegex(), " ")
     }
 }

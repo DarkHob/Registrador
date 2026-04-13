@@ -51,6 +51,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
+        if (isReactionNotification(text, subText)) {
+            AppLogger.d("Ignorado: reacción -> text=$text | subText=$subText")
+            return
+        }
+
         val rawNumber = if (looksLikePhoneNumber(title)) {
             title
         } else {
@@ -82,7 +87,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        val allowed = eventFilter.shouldSend(number, type)
+        val allowed = eventFilter.shouldSend(number, type, text)
         AppLogger.d("Filtro -> number=$number | type=$type | allowed=$allowed")
 
         if (!allowed) {
@@ -148,6 +153,17 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         }
 
         return EventType.MESSAGE
+    }
+
+    private fun isReactionNotification(text: String?, subText: String?): Boolean {
+        val joined = "${text.orEmpty()} ${subText.orEmpty()}".lowercase()
+
+        return joined.contains("reaccionó a tu mensaje") ||
+                joined.contains("reaccionó con") ||
+                joined.contains("reaccionó ") ||
+                joined.contains("reacted to your message") ||
+                joined.contains("reacted with") ||
+                joined.contains("reaction to your message")
     }
 
     private fun isProbablyGroup(title: String, text: String?): Boolean {
