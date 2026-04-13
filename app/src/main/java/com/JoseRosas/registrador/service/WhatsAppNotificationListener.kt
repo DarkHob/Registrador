@@ -41,12 +41,22 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         AppLogger.d("Notificación de paquete: $packageName")
 
+        if (isGeneralAppNotification(title)) {
+            AppLogger.d("Ignorado: notificación general de app -> $title")
+            return
+        }
+
         if (isProbablyGroup(title, text)) {
             AppLogger.d("Ignorado: grupo detectado -> $title")
             return
         }
 
-        val rawNumber = contactResolver.getPhoneNumber(title)
+        val rawNumber = if (looksLikePhoneNumber(title)) {
+            title
+        } else {
+            contactResolver.getPhoneNumber(title)
+        }
+
         if (rawNumber.isNullOrEmpty()) {
             AppLogger.d("No se encontró número para: $title")
             return
@@ -94,6 +104,22 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         return packageName == "com.whatsapp" || packageName == "com.whatsapp.w4b"
     }
 
+    private fun isGeneralAppNotification(title: String): Boolean {
+        return title.equals("WA Business", ignoreCase = true) ||
+                title.equals("WhatsApp Business", ignoreCase = true) ||
+                title.equals("WhatsApp", ignoreCase = true)
+    }
+
+    private fun looksLikePhoneNumber(value: String): Boolean {
+        val cleaned = value
+            .replace(" ", "")
+            .replace("-", "")
+            .replace("(", "")
+            .replace(")", "")
+
+        return cleaned.matches(Regex("^\\+?\\d{7,15}$"))
+    }
+
     private fun detectEventType(text: String?, subText: String?): EventType {
         val t = (text ?: "").lowercase()
         val s = (subText ?: "").lowercase()
@@ -101,7 +127,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         if (joined.isBlank()) return EventType.UNKNOWN
 
-        // llamadas salientes
         if (
             joined.contains("llamando") ||
             joined.contains("calling") ||
@@ -112,7 +137,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return EventType.OUTGOING_CALL
         }
 
-        // llamadas entrantes / activas detectables
         if (
             joined.contains("llamada") ||
             joined.contains("videollamada") ||
