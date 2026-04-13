@@ -15,7 +15,6 @@ class TcpClient(
     private var writer: BufferedWriter? = null
     private val executor = Executors.newSingleThreadExecutor()
 
-
     fun send(number: String, type: String, timestamp: Long) {
         executor.execute {
             val payload = """{"number":"$number","type":"$type","ts":$timestamp}"""
