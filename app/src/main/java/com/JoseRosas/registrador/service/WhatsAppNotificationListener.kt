@@ -87,7 +87,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        val allowed = eventFilter.shouldSend(number, type, text)
+        val allowed = eventFilter.shouldSend(number, text)
         AppLogger.d("Filtro -> number=$number | type=$type | allowed=$allowed")
 
         if (!allowed) {
